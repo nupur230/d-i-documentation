@@ -1,1 +1,1 @@
-# d-i-documentation
+This repo has documentations of DRI
