@@ -1,0 +1,189 @@
+pipeline {
+    agent {
+        
+        node {
+                       label "built-in"
+        }
+    }
+
+post {
+      failure {
+        updateGitlabCommitStatus name: 'build failed', state: 'failed'
+      }
+      success {
+        updateGitlabCommitStatus name: 'build passed', state: 'success'
+      }
+      aborted {
+        updateGitlabCommitStatus name: 'build aborted', state: 'canceled'
+      }
+    }
+    options {
+      gitLabConnection('Derivaz')
+    }
+    triggers {
+        gitlab(triggerOnMergeRequest: true, branchFilterType: 'All')
+    }
+
+    
+stages {
+      
+  
+stage('Checkout') { 
+        steps {  
+            
+           
+            sh "sudo rm -rf *"
+          
+            git url: "${gitlabSourceRepoURL}", branch: '${gitlabSourceBranch}'
+}
+}
+
+
+stage ('Parallel-stages') {
+    
+parallel {   
+
+stage ('Building the code') {
+steps {
+ 
+
+           //build 'DRI_frontend_build_for_jenkins'
+         
+         sh '''
+                    export NVM_DIR="$HOME/.nvm"
+                    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                    [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+                    ng --version
+                    npm cache clean --force
+                    sudo rm -rf node_modules
+                    sudo rm -rf package-lock.json
+                    npm i
+                    npm run build --prod --aot --output-hashing=all
+                    cd dist/osians/
+                    sudo tar -cvf build.tar browser
+                    sudo cp build.tar /var/lib/jenkins/workspace/Webhook_test/
+                    
+					
+                '''
+
+}
+}
+
+stage ('Sonarqube analysis') {
+
+steps {
+dir ('/var/lib/jenkins/barclays') {
+    
+             sh "sudo rm -rf *"
+    
+             sh "sudo cp -R /var/lib/jenkins/workspace/Webhook_test/* ."   //copying the checkout files to another directory and running sonar scan because it installs its own node dependencies that coincides with the node_modules directory when executed from the same location
+             
+             sh "sudo npm install sonar-scanner --save-dev"
+             
+             sh "sudo npm run sonar"
+			 
+	     sh "date"
+					
+			}
+}
+}
+
+
+}
+}
+
+stage ('Extracting latest build'){
+  
+ steps {
+  
+ dir ('/var/lib/jenkins/workspace/Webhook_test') {
+  
+				sh "sudo tar xvf build.tar"
+		
+		                sh "date"
+ }
+ }
+ }
+  
+ stage ('Copying config file & Dockerfile'){
+
+ steps {
+ 
+ dir ('/var/lib/jenkins/workspace/Webhook_test/browser') {
+  
+ 
+		
+		        sh "sudo cp /var/lib/jenkins/workspace/DETAILS101/browser/config ."
+				
+	                sh "sudo cp /var/lib/jenkins/workspace/DETAILS101/browser/Dockerfile ."
+				
+		        sh "date"
+  }
+ }
+ } 
+
+stage ('Docker login, Docker image & environment') {
+  
+ steps {     
+  
+ dir ('/var/lib/jenkins/workspace/Webhook_test/browser') { 
+  
+              
+			 sh "sudo docker rmi nupur204/test:2.0"
+			  
+			 sh "sudo docker rmi -f derivaz_front:1.0"
+			  
+			  sh "sudo docker build -t derivaz_front:1.0 ."
+			  
+			  sh "sudo docker tag derivaz_front:1.0 nupur204/test:2.0"
+			  
+			  sh "sudo docker run -itd --name derivaz_Frontend -p 9090:80 nupur204/test:2.0"
+			  
+			  sh "date"
+			  
+    }
+    }
+    
+}
+
+stage ('Cypress containerized test') {
+
+agent {
+    node {
+                     label "10.0.4.17"
+    }
+}
+
+steps {
+
+         
+		 
+		 sh "sudo docker run cyder:1.6 npx cypress run --env ENV='test',TAGS='@smoketest' --spec '**/**/login.feature'"
+		 
+		 sh "sudo docker run cyder:1.6 npx cypress run --env ENV='test',TAGS='@smoke' --spec '**/**/header.feature'"
+		 
+		 sh "sudo docker run cyder:1.6 npx cypress run --env ENV='test',TAGS='@smoke' --spec '**/**/footer.feature'"
+		 
+		 sh "date"
+
+}
+}
+
+stage ('Deletion of Environments') {
+
+steps {
+            
+		sh "sudo docker stop derivaz_Frontend"
+         
+		sh "sudo docker rm derivaz_Frontend"
+		
+		sh "date"
+	
+}
+}
+
+
+
+}
+	 
+}
