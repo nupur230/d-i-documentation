@@ -1,0 +1,13 @@
+FROM cypress/included:cypress-12.5.0-node-16.18.1-chrome-109.0.5414.74-1-ff-109.0-edge-109.0.1518.52-1
+WORKDIR /app
+COPY package.json /app
+#COPY package-lock.json /app
+RUN npm install --force
+RUN npm install @reportportal/agent-js-cypress ----legacy-peer-deps
+COPY . /app
+RUN apt-get install -y xvfb
+RUN apt-get update
+CMD [ "npx", "cypress" , "run" ]
+
+
+#Current custom cypress docker image - cyder:1.6

@@ -1,0 +1,12 @@
+#This Dockerfile is built as derivaz_front:1.0 & then tagged as nupur204/test:2.0, nupur204 is docker-hub account
+
+
+FROM nginx:latest
+
+WORKDIR /usr/share/nginx/html
+
+COPY ./ /usr/share/nginx/html
+
+EXPOSE 80
+
+
